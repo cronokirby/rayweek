@@ -42,11 +42,35 @@ impl Ray {
         self.origin + self.direction * t
     }
 
-    fn gradient(&self) -> Vec3 {
+    fn cast(&self) -> Vec3 {
+        if Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5).hits(self) {
+            return Vec3::new(1.0, 0.0, 0.0);
+        }
+
         let mut unit = self.direction;
         unit.norm();
         let t = 0.5 * (unit.y + 1.0);
         Vec3::new(1.0, 1.0, 1.0) * (1.0 - t) + Vec3::new(0.5, 0.7, 1.0) * t
+    }
+}
+
+struct Sphere {
+    center: Vec3,
+    radius: f32
+}
+
+impl Sphere {
+    fn new(center: Vec3, radius: f32) -> Self {
+        Sphere { center, radius }
+    }
+
+    fn hits(&self, ray: &Ray) -> bool {
+        let oc = ray.origin - self.center;
+        let a = ray.direction.squared_length();
+        let b = oc.dot(ray.direction) * 2.0;
+        let c = oc.dot(oc) - self.radius * self.radius;
+        let delta = b * b - 4.0 * a * c;
+        delta > 0.0
     }
 }
 
@@ -56,12 +80,12 @@ fn main() -> io::Result<()> {
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
     let origin = Vec3::new(0.0, 0.0, 0.0);
-    let img = ImageBuffer::from_fn(400, 300, |x, y| {
+    let img = ImageBuffer::from_fn(400, 200, |x, y| {
         let u = (x as f32) / 400.0;
         // We want the y coordinate to go up
-        let v = 1.0 - (y as f32) / 300.0;
+        let v = 1.0 - (y as f32) / 200.0;
         let pos = lower_left + horizontal * u + vertical * v;
-        let col = Ray::new(origin, pos).gradient();
+        let col = Ray::new(origin, pos).cast();
         color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
