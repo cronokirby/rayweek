@@ -1,9 +1,33 @@
 use std::io;
 
 
+#[inline]
+fn clip(f: f32) -> f32 {
+    if f > 1.0 {
+        1.0
+    } else if f < 0.0 {
+        0.0
+    } else {
+        f
+    }
+}
+
+#[inline]
+fn comp_byte(f: f32) -> u8 {
+    (f * 255.0) as u8
+}
+
+
 /// Represents an RGBA color
 #[derive(Clone, Copy, Debug)]
-pub struct RGBA(pub u8, pub u8, pub u8, pub u8);
+pub struct RGBA(pub f32, pub f32, pub f32, pub f32);
+
+impl RGBA {
+    pub fn clip(&self) -> Self {
+        let RGBA(r, g, b, a) = *self;
+        RGBA(clip(r), clip(g), clip(b), clip(a))
+    }
+}
 
 
 /// Represents an RGBA image
@@ -76,8 +100,8 @@ impl Image {
 
         for y in (0..h).rev() {
             for x in 0..w {
-                let RGBA(r, g, b, a) = self.get_pixel(x, y);
-                sink.write_all(&[b, g, r, a])?;
+                let RGBA(r, g, b, a) = self.get_pixel(x, y).clip();
+                sink.write_all(&[comp_byte(b), comp_byte(g), comp_byte(r), comp_byte(a)])?;
             }
         }
         Ok(())
