@@ -3,6 +3,8 @@ use std::io;
 extern crate image;
 use image::{ImageBuffer, Rgba};
 
+mod math;
+
 
 fn clip(f: f32) -> f32 {
     if f > 1.0 {
@@ -25,9 +27,9 @@ fn color(r: f32, g: f32, b: f32, a: f32) -> Rgba<u8> {
 
 
 fn main() -> io::Result<()> {
-    let img = ImageBuffer::from_fn(1024, 768, |x, y| {
-        let r = (x as f32) / 1024.0;
-        let g = (y as f32) / 768.0;
+    let img = ImageBuffer::from_fn(400, 400, |x, y| {
+        let r = (x as f32) / 400.0;
+        let g = (y as f32) / 400.0;
         color(r, g, 0.2, 1.0)
     });
     img.save("image.png")?;
