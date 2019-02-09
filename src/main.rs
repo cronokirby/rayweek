@@ -41,14 +41,28 @@ impl Ray {
     fn point_at(&self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
+
+    fn gradient(&self) -> Vec3 {
+        let mut unit = self.direction;
+        unit.norm();
+        let t = 0.5 * (unit.y + 1.0);
+        Vec3::new(1.0, 1.0, 1.0) * (1.0 - t) + Vec3::new(0.5, 0.7, 1.0) * t
+    }
 }
 
 
 fn main() -> io::Result<()> {
+    let lower_left = Vec3::new(-2.0, -1.0, -1.0);
+    let horizontal = Vec3::new(4.0, 0.0, 0.0);
+    let vertical = Vec3::new(0.0, 2.0, 0.0);
+    let origin = Vec3::new(0.0, 0.0, 0.0);
     let img = ImageBuffer::from_fn(400, 300, |x, y| {
-        let r = (x as f32) / 400.0;
-        let g = (y as f32) / 300.0;
-        color(r, g, 0.2, 1.0)
+        let u = (x as f32) / 400.0;
+        // We want the y coordinate to go up
+        let v = 1.0 - (y as f32) / 300.0;
+        let pos = lower_left + horizontal * u + vertical * v;
+        let col = Ray::new(origin, pos).gradient();
+        color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
     Ok(())
