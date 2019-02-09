@@ -4,6 +4,7 @@ extern crate image;
 use image::{ImageBuffer, Rgba};
 
 mod math;
+use math::Vec3;
 
 
 fn clip(f: f32) -> f32 {
@@ -26,10 +27,27 @@ fn color(r: f32, g: f32, b: f32, a: f32) -> Rgba<u8> {
 }
 
 
+#[derive(Debug)]
+struct Ray {
+    origin: Vec3,
+    direction: Vec3
+}
+ 
+impl Ray {
+    fn new(origin: Vec3, direction: Vec3) -> Self {
+        Ray { origin, direction }
+    }
+
+    fn point_at(&self, t: f32) -> Vec3 {
+        self.origin + self.direction * t
+    }
+}
+
+
 fn main() -> io::Result<()> {
-    let img = ImageBuffer::from_fn(400, 400, |x, y| {
+    let img = ImageBuffer::from_fn(400, 300, |x, y| {
         let r = (x as f32) / 400.0;
-        let g = (y as f32) / 400.0;
+        let g = (y as f32) / 300.0;
         color(r, g, 0.2, 1.0)
     });
     img.save("image.png")?;
