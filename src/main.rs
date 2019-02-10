@@ -1,3 +1,4 @@
+use std::f32;
 use std::io;
 
 extern crate image;
@@ -27,6 +28,18 @@ fn color(r: f32, g: f32, b: f32, a: f32) -> Rgba<u8> {
 }
 
 
+struct HitRec {
+    t: f32,
+    p: Vec3,
+    normal: Vec3
+}
+
+
+trait Hittable {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRec>;
+}
+
+
 #[derive(Debug)]
 struct Ray {
     origin: Vec3,
@@ -42,11 +55,9 @@ impl Ray {
         self.origin + self.direction * t
     }
 
-    fn cast(&self) -> Vec3 {
-        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
-        if let Some(t) = sphere.hits(self) {
-            let n = (self.point_at(t) - Vec3::new(0.0, 0.0, -1.0)).norm();
-            (n + Vec3::new(1.0, 1.0, 1.0)) / 2.0
+    fn cast(&self, target: &impl Hittable) -> Vec3 {
+        if let Some(rec) = target.hit(self, 0.0, f32::MAX) {
+            (rec.normal + Vec3::new(1.0, 1.0, 1.0)) / 2.0
         } else {
             let unit = self.direction.norm();
             let t = 0.5 * (unit.y + 1.0);
@@ -64,18 +75,34 @@ impl Sphere {
     fn new(center: Vec3, radius: f32) -> Self {
         Sphere { center, radius }
     }
+}
 
-    fn hits(&self, ray: &Ray) -> Option<f32> {
+impl Hittable for Sphere {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRec> {
         let oc = ray.origin - self.center;
         let a = ray.direction.squared_length();
-        let b = oc.dot(ray.direction) * 2.0;
-        let c = oc.dot(oc) - self.radius * self.radius;
-        let delta = b * b - 4.0 * a * c;
+        let b = oc.dot(ray.direction);
+        let c = oc.squared_length() - self.radius * self.radius;
+        let delta = b * b - a * c;
         if delta < 0.0 {
-            None
-        } else {
-            Some((-b - delta.sqrt()) / (2.0 * a))
+            return None;
+        } 
+        let mut solution = None;
+        let left_solution = (-b - delta.sqrt()) / a;
+        if left_solution < t_max && left_solution > t_min {
+            solution = Some(left_solution);
         }
+        if solution.is_none() {
+            let right_solution = (-b + delta.sqrt()) / a;
+            if right_solution < t_max && right_solution > t_min {
+                solution = Some(right_solution);
+            }
+        }
+        solution.map(|t| {
+            let p = ray.point_at(t);
+            let normal = (p - self.center) / self.radius;
+            HitRec { t, p, normal }
+        })
     }
 }
 
@@ -85,12 +112,13 @@ fn main() -> io::Result<()> {
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
     let origin = Vec3::new(0.0, 0.0, 0.0);
+    let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
     let img = ImageBuffer::from_fn(400, 200, |x, y| {
         let u = (x as f32) / 400.0;
         // We want the y coordinate to go up
         let v = 1.0 - (y as f32) / 200.0;
         let pos = lower_left + horizontal * u + vertical * v;
-        let col = Ray::new(origin, pos).cast();
+        let col = Ray::new(origin, pos).cast(&sphere);
         color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
