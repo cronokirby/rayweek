@@ -29,6 +29,16 @@ fn color(r: f32, g: f32, b: f32, a: f32) -> Rgba<u8> {
     ])
 }
 
+fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
+    loop {
+        let rand = Vec3::new(rng.gen(), rng.gen(), rng.gen());
+        let p = rand * 2.0 - Vec3::new(1.0, 1.0, 1.0);
+        if p.squared_length() < 1.0 {
+            return p
+        }
+    }
+}
+
 
 struct HitRec {
     t: f32,
@@ -57,9 +67,10 @@ impl Ray {
         self.origin + self.direction * t
     }
 
-    fn cast(&self, target: &impl Hittable) -> Vec3 {
-        if let Some(rec) = target.hit(self, 0.0, f32::MAX) {
-            (rec.normal + Vec3::new(1.0, 1.0, 1.0)) / 2.0
+    fn cast(&self, rng: &mut ThreadRng, target: &impl Hittable) -> Vec3 {
+        if let Some(rec) = target.hit(self, 0.0001, f32::MAX) {
+            let dir = rec.normal + random_in_unit_sphere(rng);
+            Ray::new(rec.p, dir).cast(rng, target) * 0.5
         } else {
             let unit = self.direction.norm();
             let t = 0.5 * (unit.y + 1.0);
@@ -152,16 +163,17 @@ fn main() -> io::Result<()> {
     let mut rng = rand::thread_rng();
     let samples = 100;
 
-    let img = ImageBuffer::from_fn(400, 200, |x, y| {
+    let img = ImageBuffer::from_fn(200, 100, |x, y| {
         let mut col = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {
-            let u = ((x as f32) + rng.gen::<f32>()) / 400.0;
-            let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 200.0;
+            let u = ((x as f32) + rng.gen::<f32>()) / 200.0;
+            // We want the y coordinate to go up
+            let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 100.0;
             let pos = lower_left + horizontal * u + vertical * v;
-            col += Ray::new(origin, pos).cast(&hittables);
+            col += Ray::new(origin, pos).cast(&mut rng, &hittables);
         }
         col /= samples as f32;
-        // We want the y coordinate to go up
+        col = Vec3::new(col.x.sqrt(), col.y.sqrt(), col.z.sqrt());
         color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
