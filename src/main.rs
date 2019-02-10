@@ -3,6 +3,8 @@ use std::io;
 
 extern crate image;
 use image::{ImageBuffer, Rgba};
+extern crate rand;
+use rand::prelude::*;
 
 mod math;
 use math::Vec3;
@@ -147,12 +149,19 @@ fn main() -> io::Result<()> {
     let vertical = Vec3::new(0.0, 2.0, 0.0);
     let origin = Vec3::new(0.0, 0.0, 0.0);
 
+    let mut rng = rand::thread_rng();
+    let samples = 100;
+
     let img = ImageBuffer::from_fn(400, 200, |x, y| {
-        let u = (x as f32) / 400.0;
+        let mut col = Vec3::new(0.0, 0.0, 0.0);
+        for _ in 0..samples {
+            let u = ((x as f32) + rng.gen::<f32>()) / 400.0;
+            let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 200.0;
+            let pos = lower_left + horizontal * u + vertical * v;
+            col += Ray::new(origin, pos).cast(&hittables);
+        }
+        col /= samples as f32;
         // We want the y coordinate to go up
-        let v = 1.0 - (y as f32) / 200.0;
-        let pos = lower_left + horizontal * u + vertical * v;
-        let col = Ray::new(origin, pos).cast(&hittables);
         color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
