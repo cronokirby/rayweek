@@ -43,14 +43,15 @@ impl Ray {
     }
 
     fn cast(&self) -> Vec3 {
-        if Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5).hits(self) {
-            return Vec3::new(1.0, 0.0, 0.0);
+        let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
+        if let Some(t) = sphere.hits(self) {
+            let n = (self.point_at(t) - Vec3::new(0.0, 0.0, -1.0)).norm();
+            (n + Vec3::new(1.0, 1.0, 1.0)) / 2.0
+        } else {
+            let unit = self.direction.norm();
+            let t = 0.5 * (unit.y + 1.0);
+            Vec3::new(1.0, 1.0, 1.0) * (1.0 - t) + Vec3::new(0.5, 0.7, 1.0) * t
         }
-
-        let mut unit = self.direction;
-        unit.norm();
-        let t = 0.5 * (unit.y + 1.0);
-        Vec3::new(1.0, 1.0, 1.0) * (1.0 - t) + Vec3::new(0.5, 0.7, 1.0) * t
     }
 }
 
@@ -64,13 +65,17 @@ impl Sphere {
         Sphere { center, radius }
     }
 
-    fn hits(&self, ray: &Ray) -> bool {
+    fn hits(&self, ray: &Ray) -> Option<f32> {
         let oc = ray.origin - self.center;
         let a = ray.direction.squared_length();
         let b = oc.dot(ray.direction) * 2.0;
         let c = oc.dot(oc) - self.radius * self.radius;
         let delta = b * b - 4.0 * a * c;
-        delta > 0.0
+        if delta < 0.0 {
+            None
+        } else {
+            Some((-b - delta.sqrt()) / (2.0 * a))
+        }
     }
 }
 
