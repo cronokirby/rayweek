@@ -107,18 +107,52 @@ impl Hittable for Sphere {
 }
 
 
+struct Hittables {
+    data: Vec<Box<Hittable>>
+}
+
+impl Hittables {
+    fn new() -> Self {
+        Hittables { data: Vec::new() }
+    }
+
+    fn add<H: Hittable + 'static>(&mut self, object: H) {
+        self.data.push(Box::new(object))
+    }
+}
+
+impl Hittable for Hittables {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRec> {
+        let mut res = None;
+        let mut closest = t_max;
+        for hittable in self.data.iter() {
+            let next_hit = hittable.hit(ray, t_min, closest);
+            if let Some(rec) = next_hit {
+                closest = rec.t;
+                res = Some(rec);
+            }
+        }
+        res
+    }
+}
+
+
 fn main() -> io::Result<()> {
+    let mut hittables = Hittables::new();
+    hittables.add(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5));
+    hittables.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0));
+
     let lower_left = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
     let vertical = Vec3::new(0.0, 2.0, 0.0);
     let origin = Vec3::new(0.0, 0.0, 0.0);
-    let sphere = Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5);
+
     let img = ImageBuffer::from_fn(400, 200, |x, y| {
         let u = (x as f32) / 400.0;
         // We want the y coordinate to go up
         let v = 1.0 - (y as f32) / 200.0;
         let pos = lower_left + horizontal * u + vertical * v;
-        let col = Ray::new(origin, pos).cast(&sphere);
+        let col = Ray::new(origin, pos).cast(&hittables);
         color(col.x, col.y, col.z, 1.0)
     });
     img.save("image.png")?;
