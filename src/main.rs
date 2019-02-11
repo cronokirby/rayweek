@@ -42,7 +42,8 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
 
 #[derive(Clone, Copy, Debug)]
 enum Material {
-    Diffuse(Vec3)
+    Diffuse(Vec3),
+    Metal(Vec3, f32)
 }
 
 
@@ -61,6 +62,17 @@ impl HitRec {
                 let scattered = Ray::new(self.p, direction);
                 let attenuation = albedo;
                 Some((scattered, attenuation))
+            }
+            Material::Metal(albedo, fuzz) => {
+                let reflected = in_ray.direction.norm().reflect(self.normal);
+                let direction = reflected + random_in_unit_sphere(rng) * fuzz;
+                let scattered = Ray::new(self.p, direction);
+                let attenuation = albedo;
+                if scattered.direction.dot(self.normal) > 0.0 {
+                    Some((scattered, attenuation))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -187,6 +199,14 @@ fn main() -> io::Result<()> {
     hittables.add(Sphere::new(
         Vec3::new(0.0, -100.5, -1.0), 100.0,
         Material::Diffuse(Vec3::new(0.8, 0.8, 0.0))
+    ));
+    hittables.add(Sphere::new(
+        Vec3::new(1.0, 0.0, -1.0), 0.5,
+        Material::Metal(Vec3::new(0.8, 0.6, 0.2), 0.3)
+    ));
+    hittables.add(Sphere::new(
+        Vec3::new(-1.0, 0.0, -1.0), 0.5,
+        Material::Metal(Vec3::new(0.8, 0.8, 0.8), 0.1)
     ));
 
     let lower_left = Vec3::new(-2.0, -1.0, -1.0);
