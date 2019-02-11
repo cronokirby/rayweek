@@ -39,11 +39,30 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
     }
 }
 
+fn refract(v: Vec3, n: Vec3, ni_over_nt: f32) -> Option<Vec3> {
+    let uv = v.norm();
+    let dt = uv.dot(n);
+    let delta = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
+    if delta > 0.0 {
+        let refracted = (uv - n * dt) * ni_over_nt - n * delta.sqrt();
+        Some(refracted)
+    } else {
+        None
+    }
+}
+
+fn schlick(cosine: f32, ref_idx: f32) -> f32 {
+    let mut r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+    r0 *= r0;
+    r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
+}
+
 
 #[derive(Clone, Copy, Debug)]
 enum Material {
     Diffuse(Vec3),
-    Metal(Vec3, f32)
+    Metal(Vec3, f32),
+    Glass(f32)
 }
 
 
@@ -73,6 +92,39 @@ impl HitRec {
                 } else {
                     None
                 }
+            }
+            Material::Glass(ri) => {
+                let reflected = in_ray.direction.reflect(self.normal);
+                let attenuation = Vec3::new(1.0, 1.0, 1.0);
+
+                let outward_normal;
+                let ni_over_nt;
+                let cosine;
+                let dot = in_ray.direction.dot(self.normal);
+                if dot > 0.0 {
+                    outward_normal = -self.normal;
+                    ni_over_nt = ri;
+                    cosine = ri * dot / in_ray.direction.length();
+                } else {
+                    outward_normal = self.normal;
+                    ni_over_nt = 1.0 / ri;
+                    cosine = -dot / in_ray.direction.length();
+                }
+
+                let scattered;
+                let m_refract = refract(in_ray.direction, outward_normal, ni_over_nt);
+                if let Some(refracted) = m_refract {
+                    let reflect_prob = schlick(cosine, ri);
+                    if rng.gen::<f32>() > reflect_prob {
+                        scattered = Ray::new(self.p, refracted)
+                    } else {
+                        scattered = Ray::new(self.p, reflected)
+                    }
+                } else {
+                    scattered = Ray::new(self.p, reflected)
+                }
+
+                Some((scattered, attenuation))
             }
         }
     }
@@ -206,7 +258,11 @@ fn main() -> io::Result<()> {
     ));
     hittables.add(Sphere::new(
         Vec3::new(-1.0, 0.0, -1.0), 0.5,
-        Material::Metal(Vec3::new(0.8, 0.8, 0.8), 0.1)
+        Material::Glass(1.5)
+    ));
+    hittables.add(Sphere::new(
+        Vec3::new(-1.0, 0.0, -1.0), -0.45,
+        Material::Glass(1.5)
     ));
 
     let lower_left = Vec3::new(-2.0, -1.0, -1.0);
@@ -217,12 +273,12 @@ fn main() -> io::Result<()> {
     let mut rng = rand::thread_rng();
     let samples = 100;
 
-    let img = ImageBuffer::from_fn(200, 100, |x, y| {
+    let img = ImageBuffer::from_fn(800, 400, |x, y| {
         let mut col = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {
-            let u = ((x as f32) + rng.gen::<f32>()) / 200.0;
+            let u = ((x as f32) + rng.gen::<f32>()) / 800.0;
             // We want the y coordinate to go up
-            let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 100.0;
+            let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 400.0;
             let pos = lower_left + horizontal * u + vertical * v;
             col += cast_ray(Ray::new(origin, pos), &mut rng, &hittables, 50);
         }
