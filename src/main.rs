@@ -40,12 +40,31 @@ fn random_in_unit_sphere(rng: &mut ThreadRng) -> Vec3 {
 }
 
 
+#[derive(Clone, Copy, Debug)]
+enum Material {
+    Diffuse(Vec3)
+}
+
+
 struct HitRec {
     t: f32,
     p: Vec3,
-    normal: Vec3
+    normal: Vec3,
+    material: Material
 }
 
+impl HitRec {
+    fn scatter(&self, in_ray: &Ray, rng: &mut ThreadRng) -> Option<(Ray, Vec3)> {
+        match self.material {
+            Material::Diffuse(albedo) => {
+                let direction = self.normal + random_in_unit_sphere(rng);
+                let scattered = Ray::new(self.p, direction);
+                let attenuation = albedo;
+                Some((scattered, attenuation))
+            }
+        }
+    }
+}
 
 trait Hittable {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRec>;
@@ -66,27 +85,36 @@ impl Ray {
     fn point_at(&self, t: f32) -> Vec3 {
         self.origin + self.direction * t
     }
+}
 
-    fn cast(&self, rng: &mut ThreadRng, target: &impl Hittable) -> Vec3 {
-        if let Some(rec) = target.hit(self, 0.0001, f32::MAX) {
-            let dir = rec.normal + random_in_unit_sphere(rng);
-            Ray::new(rec.p, dir).cast(rng, target) * 0.5
+fn cast_ray(mut ray: Ray, rng: &mut ThreadRng, target: &impl Hittable, depth: i32) -> Vec3 {
+    let mut color = Vec3::new(1.0, 1.0, 1.0);
+    for _ in 0..depth {
+        if let Some(rec) = target.hit(&ray, 0.0001, f32::MAX) {
+            if let Some((scattered, attenuation)) = rec.scatter(&ray, rng) {
+                ray = scattered;
+                color *= attenuation;
+            }
         } else {
-            let unit = self.direction.norm();
+            let unit = ray.direction.norm();
             let t = 0.5 * (unit.y + 1.0);
-            Vec3::new(1.0, 1.0, 1.0) * (1.0 - t) + Vec3::new(0.5, 0.7, 1.0) * t
+            let left = Vec3::new(1.0, 1.0, 1.0) * (1.0 - t);
+            let right = Vec3::new(0.5, 0.7, 1.0) * t;
+            return color * (left + right)
         }
     }
+    Vec3::new(0.0, 0.0, 0.0)
 }
 
 struct Sphere {
     center: Vec3,
-    radius: f32
+    radius: f32,
+    material: Material
 }
 
 impl Sphere {
-    fn new(center: Vec3, radius: f32) -> Self {
-        Sphere { center, radius }
+    fn new(center: Vec3, radius: f32, material: Material) -> Self {
+        Sphere { center, radius, material }
     }
 }
 
@@ -114,7 +142,7 @@ impl Hittable for Sphere {
         solution.map(|t| {
             let p = ray.point_at(t);
             let normal = (p - self.center) / self.radius;
-            HitRec { t, p, normal }
+            HitRec { t, p, normal, material: self.material }
         })
     }
 }
@@ -152,8 +180,14 @@ impl Hittable for Hittables {
 
 fn main() -> io::Result<()> {
     let mut hittables = Hittables::new();
-    hittables.add(Sphere::new(Vec3::new(0.0, 0.0, -1.0), 0.5));
-    hittables.add(Sphere::new(Vec3::new(0.0, -100.5, -1.0), 100.0));
+    hittables.add(Sphere::new(
+        Vec3::new(0.0, 0.0, -1.0), 0.5,
+        Material::Diffuse(Vec3::new(0.8, 0.3, 0.3))
+    ));
+    hittables.add(Sphere::new(
+        Vec3::new(0.0, -100.5, -1.0), 100.0,
+        Material::Diffuse(Vec3::new(0.8, 0.8, 0.0))
+    ));
 
     let lower_left = Vec3::new(-2.0, -1.0, -1.0);
     let horizontal = Vec3::new(4.0, 0.0, 0.0);
@@ -170,7 +204,7 @@ fn main() -> io::Result<()> {
             // We want the y coordinate to go up
             let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 100.0;
             let pos = lower_left + horizontal * u + vertical * v;
-            col += Ray::new(origin, pos).cast(&mut rng, &hittables);
+            col += cast_ray(Ray::new(origin, pos), &mut rng, &hittables, 50);
         }
         col /= samples as f32;
         col = Vec3::new(col.x.sqrt(), col.y.sqrt(), col.z.sqrt());
