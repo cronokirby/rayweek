@@ -242,10 +242,39 @@ impl Hittable for Hittables {
 }
 
 
+struct Camera {
+    origin: Vec3,
+    lower_left: Vec3,
+    horizontal: Vec3,
+    vertical: Vec3
+}
+
+impl Camera {
+    fn new(lookfrom: Vec3, lookat: Vec3, vup: Vec3, vfov: f32, aspect: f32) -> Self {
+        let theta = vfov * f32::consts::PI / 180.0;
+        let half_height = (theta / 2.0).tan();
+        let half_width = aspect * half_height;
+        let origin = lookfrom;
+        let w = (lookfrom - lookat).norm();
+        let u = vup.cross(w).norm();
+        let v = w.cross(u);
+        let lower_left = origin - u * half_width - v * half_height - w;
+        let horizontal = u * half_width * 2.0;
+        let vertical = v * half_height * 2.0;
+        Camera { origin, lower_left, horizontal, vertical }
+    }
+
+    fn get_ray(&self, u: f32, v: f32) -> Ray {
+        let shift = self.horizontal * u + self.vertical * v;
+        Ray::new(self.origin, self.lower_left + shift - self.origin)
+    }
+}
+
+
 fn main() -> io::Result<()> {
     let mut hittables = Hittables::new();
     hittables.add(Sphere::new(
-        Vec3::new(0.0, 0.0, -1.0), 0.5,
+        Vec3::new(0.0, 0.0, -1.0), 0.3,
         Material::Diffuse(Vec3::new(0.8, 0.3, 0.3))
     ));
     hittables.add(Sphere::new(
@@ -261,26 +290,26 @@ fn main() -> io::Result<()> {
         Material::Glass(1.5)
     ));
     hittables.add(Sphere::new(
-        Vec3::new(-1.0, 0.0, -1.0), -0.45,
-        Material::Glass(1.5)
+        Vec3::new(0.0, 3.0, -4.0), 2.0,
+        Material::Metal(Vec3::new(0.5, 0.7, 0.5), 0.05)
     ));
 
-    let lower_left = Vec3::new(-2.0, -1.0, -1.0);
-    let horizontal = Vec3::new(4.0, 0.0, 0.0);
-    let vertical = Vec3::new(0.0, 2.0, 0.0);
-    let origin = Vec3::new(0.0, 0.0, 0.0);
-
+    let camera = Camera::new(
+        Vec3::new(0.0, 1.4, 4.0),
+        Vec3::new(0.0, 0.0, -1.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        90.0, 2.0
+    );
     let mut rng = rand::thread_rng();
     let samples = 100;
-
+    
     let img = ImageBuffer::from_fn(800, 400, |x, y| {
         let mut col = Vec3::new(0.0, 0.0, 0.0);
         for _ in 0..samples {
             let u = ((x as f32) + rng.gen::<f32>()) / 800.0;
             // We want the y coordinate to go up
             let v = 1.0 - ((y as f32) - rng.gen::<f32>()) / 400.0;
-            let pos = lower_left + horizontal * u + vertical * v;
-            col += cast_ray(Ray::new(origin, pos), &mut rng, &hittables, 50);
+            col += cast_ray(camera.get_ray(u, v), &mut rng, &hittables, 50);
         }
         col /= samples as f32;
         col = Vec3::new(col.x.sqrt(), col.y.sqrt(), col.z.sqrt());
